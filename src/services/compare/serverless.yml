@@ -6,9 +6,9 @@ package:
   individually: true
 
 plugins:
+  - serverless-plugin-typescript
   - serverless-stack-termination-protection
   - "@stratiformdigital/serverless-s3-security-helper"
-  - serverless-bundle
   - "@stratiformdigital/serverless-idempotency-helper"
   - "@stratiformdigital/serverless-online"
   - "@stratiformdigital/serverless-iam-helper"
@@ -61,6 +61,8 @@ custom:
       - val
       - production
   secretId: ${self:custom.project}/${sls:stage}/alerts
+  serverlessPluginTypescript:
+    tsConfigFileLocation: "./tsconfig.json"
 
 functions:
   workflowStarter:

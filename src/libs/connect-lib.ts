@@ -8,8 +8,8 @@ import {
   SecretsManagerClient,
   GetSecretValueCommand,
 } from "@aws-sdk/client-secrets-manager";
-import http from "http";
-import _ from "lodash";
+import * as http from "http";
+import * as _ from "lodash";
 import axios from "axios";
 
 const resolver = (req, resolve) => {
@@ -18,9 +18,16 @@ const resolver = (req, resolve) => {
   resolve(req.statusCode);
 };
 
-export async function connectRestApiWithRetry(params) {
-  return new Promise((resolve, reject) => {
-    function retry(e) {
+export async function connectRestApiWithRetry(params: {
+  hostname: string;
+  path: string;
+  method: string;
+  port?: number;
+  headers?: any;
+  body?: any;
+}) {
+  return new Promise((resolve, _reject) => {
+    function retry(e: string) {
       console.log("Got error: " + e);
       setTimeout(async function () {
         return await connectRestApiWithRetry(params);
@@ -39,17 +46,18 @@ export async function connectRestApiWithRetry(params) {
     const req = http.request(options, (res) => {
       console.log(`STATUS: ${res.statusCode}`);
       res
-        .on("data", (d) => {
-          console.log("Data: ", d.toString("utf-8"));
+        .on("data", (data) => {
+          console.log("Data: ", data.toString());
         })
         .on("error", (error) => {
-          console.error("Error: ", error.toString("utf-8"));
-          retry.call(`${error}`);
+          console.error("Error: ", error.toString());
+          retry(`${error}`);
         })
-        .on("end", (d) => {
+        .on("end", () => {
           resolver(req, resolve);
         });
     });
+
     if (params.body) {
       req.write(JSON.stringify(params.body));
     }
@@ -57,24 +65,24 @@ export async function connectRestApiWithRetry(params) {
   });
 }
 
-export async function restartConnectors(cluster, service, connectors) {
-  const workerIp = await ecs.findIpForEcsService(cluster, service);
+export async function restartConnectors(cluster: string, connectors: any[]) {
+  const workerIp = await ecs.findIpForEcsService(cluster);
   for (let i = 0; i < connectors.length; i++) {
     let connector = _.omit(connectors[i], "config");
     connector.tasks = connectors[i].config["tasks.max"];
     console.log(`Restarting connector: ${JSON.stringify(connector, null, 2)}`);
     //This won't account for multiple tasks with multiple interfaces
     await connectRestApiWithRetry({
-      hostname: workerIp,
+      hostname: workerIp!,
       path: `/connectors/${connectors[i].name}/restart?includeTasks=true?onlyFailed=true`,
       method: "POST",
     });
   }
 }
 
-export async function deleteConnector(ip, name) {
-  return new Promise((resolve, reject) => {
-    function retry(e) {
+export async function deleteConnector(ip: string, name: string) {
+  return new Promise((resolve, _reject) => {
+    function retry(e: string) {
       console.log("Got error: " + e);
       setTimeout(async function () {
         return await deleteConnector(ip, name);
@@ -97,14 +105,14 @@ export async function deleteConnector(ip, name) {
         .on("data", (d) => {
           console.log(d.toString("utf-8"));
           if (JSON.parse(d).message != `Connector ${name} not found`) {
-            return retry.call(d.toString("utf-8"));
+            return retry(d);
           }
         })
         .on("error", (error) => {
           console.error(error);
-          return retry.call(`${error}`);
+          return retry(`${error}`);
         })
-        .on("end", (d) => {
+        .on("end", () => {
           resolver(req, resolve);
         });
     });
@@ -113,16 +121,16 @@ export async function deleteConnector(ip, name) {
   });
 }
 
-export async function deleteConnectors(cluster, service, connectors) {
-  const workerIp = await ecs.findIpForEcsService(cluster, service);
+export async function deleteConnectors(cluster: string, connectors: any[]) {
+  const workerIp = await ecs.findIpForEcsService(cluster);
   for (let i = 0; i < connectors.length; i++) {
     console.log(`Deleting connector: ${connectors[i]}`);
     //This won't account for multiple tasks with multiple interfaces
-    await deleteConnector(workerIp, connectors[i]);
+    await deleteConnector(workerIp!, connectors[i]);
   }
 }
 
-export async function testConnector(ip, config) {
+export async function testConnector(ip: string, config: any) {
   return new Promise((resolve, reject) => {
     const options = {
       hostname: ip,
@@ -145,7 +153,7 @@ export async function testConnector(ip, config) {
           console.error(error);
           reject(error);
         })
-        .on("end", (d) => {
+        .on("end", () => {
           resolver(req, resolve);
         });
     });
@@ -155,45 +163,46 @@ export async function testConnector(ip, config) {
   });
 }
 
-export async function testConnectors(cluster, service, connectors) {
-  const workerIp = await ecs.findIpForEcsService(cluster, service);
+export async function testConnectors(cluster: string, connectors: any[]) {
+  const workerIp = await ecs.findIpForEcsService(cluster);
   return await Promise.all(
     connectors.map((connector) => {
       console.log(`Testing connector: ${connector.name}`);
-      return testConnector(workerIp, connector);
+      return testConnector(workerIp!, connector);
     })
   );
 }
 
-export async function findTaskIp(cluster) {
-  const client = new ECSClient();
+export async function findTaskIp(cluster: string) {
+  const client = new ECSClient({});
   const { taskArns } = await client.send(
     new ListTasksCommand({
       cluster: cluster,
       desiredStatus: "RUNNING",
     })
   );
-  if (taskArns.length === 0) {
+  if (!taskArns || taskArns.length === 0) {
     throw `No task found for cluster ${cluster}`;
+  } else {
+    const tasks = (
+      await client.send(
+        new DescribeTasksCommand({
+          cluster: cluster,
+          tasks: [taskArns[0]],
+        })
+      )
+    ).tasks;
+    const task = tasks?.[0];
+    const ip = _.filter(
+      task?.attachments?.[0].details,
+      (x) => x.name === "privateIPv4Address"
+    )[0].value;
+    console.log(ip);
+    return ip;
   }
-  const tasks = (
-    await client.send(
-      new DescribeTasksCommand({
-        cluster: cluster,
-        tasks: [taskArns[0]],
-      })
-    )
-  ).tasks;
-  const task = tasks[0];
-  const ip = _.filter(
-    task.attachments[0].details,
-    (x) => x.name === "privateIPv4Address"
-  )[0].value;
-  console.log(ip);
-  return ip;
 }
 
-export async function checkIfConnectIsReady(ip) {
+export async function checkIfConnectIsReady(ip: string) {
   let ready = false;
   try {
     const res = await axios.get(`http://${ip}:8083/`);
@@ -211,7 +220,10 @@ export async function checkIfConnectIsReady(ip) {
   }
 }
 
-export async function createConnector(ip, connectorConfigSecret) {
+export async function createConnector(
+  ip: string,
+  connectorConfigSecret: string
+) {
   const config = await fetchConnectorConfigFromSecretsManager(
     connectorConfigSecret
   );
@@ -235,7 +247,9 @@ export async function createConnector(ip, connectorConfigSecret) {
   }
 }
 
-async function fetchConnectorConfigFromSecretsManager(connectorConfigSecret) {
+async function fetchConnectorConfigFromSecretsManager(
+  connectorConfigSecret: string
+) {
   console.log(
     `Fetching connector config from Secrets Manager at:  ${connectorConfigSecret}`
   );
@@ -245,5 +259,6 @@ async function fetchConnectorConfigFromSecretsManager(connectorConfigSecret) {
     VersionStage: "AWSCURRENT",
   });
   const response = await client.send(command);
-  return JSON.parse(response.SecretString);
+
+  return JSON.parse(response?.SecretString ?? "");
 }

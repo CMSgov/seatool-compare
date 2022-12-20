@@ -9,7 +9,8 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest --config src/tests/vitest.config.ts",
+    "coverage": "vitest --config src/tests/vitest.config.ts --coverage"
   },
   "repository": {
     "type": "git",
@@ -29,6 +30,7 @@
     "@stratiformdigital/serverless-online": "^3.1.0",
     "@stratiformdigital/serverless-s3-security-helper": "^4.0.0",
     "@stratiformdigital/serverless-stage-destroyer": "^2.0.0",
+    "@vitest/coverage-c8": "^0.25.8",
     "semantic-release": "^19.0.5",
     "serverless": "^3.17.0",
     "serverless-bundle": "^5.3.0",
@@ -36,9 +38,9 @@
     "serverless-plugin-scripts": "^1.0.2",
     "serverless-plugin-warmup": "^7.1.0",
     "serverless-stack-termination-protection": "^2.0.0",
-    "serverless-step-functions": "^3.11.0"
+    "serverless-step-functions": "^3.11.0",
+    "vitest": "^0.25.8"
   },
-  "dependencies": {},
   "release": {
     "branches": [
       "production"
@@ -49,5 +51,12 @@
       "@semantic-release/github",
       "@semantic-release/npm"
     ]
+  },
+  "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.235.0",
+    "@aws-sdk/client-dynamodb": "^3.235.0",
+    "@aws-sdk/client-ecs": "^3.235.0",
+    "@aws-sdk/client-secrets-manager": "^3.235.0",
+    "@aws-sdk/util-dynamodb": "^3.235.0"
   }
 }
